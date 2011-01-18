@@ -12,8 +12,8 @@
 		</object>
 		<object class="NSMutableArray" key="IBDocument.EditedObjectIDs">
 			<bool key="EncodedWithXMLCoder">YES</bool>
-			<integer value="29"/>
 			<integer value="461"/>
+			<integer value="29"/>
 		</object>
 		<object class="NSArray" key="IBDocument.PluginDependencies">
 			<bool key="EncodedWithXMLCoder">YES</bool>
@@ -560,7 +560,7 @@
 				<int key="NSWindowStyleMask">15</int>
 				<int key="NSWindowBacking">2</int>
 				<string key="NSWindowRect">{{335, 545}, {572, 205}}</string>
-				<int key="NSWTFlags">1946157056</int>
+				<int key="NSWTFlags">1677721600</int>
 				<string key="NSWindowTitle">osm2spatialite</string>
 				<string key="NSWindowClass">NSWindow</string>
 				<nil key="NSViewClass"/>
@@ -758,7 +758,7 @@
 			<object class="NSWindowTemplate" id="216871462">
 				<int key="NSWindowStyleMask">15</int>
 				<int key="NSWindowBacking">2</int>
-				<string key="NSWindowRect">{{131, 295}, {437, 133}}</string>
+				<string key="NSWindowRect">{{383, 473}, {437, 133}}</string>
 				<int key="NSWTFlags">1685585920</int>
 				<string key="NSWindowTitle">Importing...</string>
 				<string key="NSWindowClass">NSWindow</string>
@@ -1179,6 +1179,14 @@
 						<reference key="destination" ref="216871462"/>
 					</object>
 					<int key="connectionID">493</int>
+				</object>
+				<object class="IBConnectionRecord">
+					<object class="IBOutletConnection" key="connection">
+						<string key="label">mainWindow</string>
+						<reference key="source" ref="610635028"/>
+						<reference key="destination" ref="972006081"/>
+					</object>
+					<int key="connectionID">494</int>
 				</object>
 			</object>
 			<object class="IBMutableOrderedSet" key="objectRecords">
@@ -2269,7 +2277,7 @@
 				</object>
 			</object>
 			<nil key="sourceID"/>
-			<int key="maxID">493</int>
+			<int key="maxID">494</int>
 		</object>
 		<object class="IBClassDescriber" key="IBDocument.Classes">
 			<object class="NSMutableArray" key="referencedPartialClassDescriptions">
@@ -2326,10 +2334,12 @@
 							<string>importWindowCurrentStagePercent</string>
 							<string>importWindowCurrentStageTime</string>
 							<string>inputFilenameField</string>
+							<string>mainWindow</string>
 							<string>outputFilenameField</string>
 						</object>
 						<object class="NSMutableArray" key="dict.values">
 							<bool key="EncodedWithXMLCoder">YES</bool>
+							<string>id</string>
 							<string>id</string>
 							<string>id</string>
 							<string>id</string>
@@ -2349,6 +2359,7 @@
 							<string>importWindowCurrentStagePercent</string>
 							<string>importWindowCurrentStageTime</string>
 							<string>inputFilenameField</string>
+							<string>mainWindow</string>
 							<string>outputFilenameField</string>
 						</object>
 						<object class="NSMutableArray" key="dict.values">
@@ -2375,6 +2386,10 @@
 							</object>
 							<object class="IBToOneOutletInfo">
 								<string key="name">inputFilenameField</string>
+								<string key="candidateClassName">id</string>
+							</object>
+							<object class="IBToOneOutletInfo">
+								<string key="name">mainWindow</string>
 								<string key="candidateClassName">id</string>
 							</object>
 							<object class="IBToOneOutletInfo">

@@ -59,6 +59,28 @@ except ImportError:
 def reportStatus(s):
     print s
 
+def reportDetailedProgress(progress):
+    if "nodes" in progrees:
+        nodes = progress["nodes"]
+    else:
+        nodes = 0
+        
+    if "ways" in progrees:
+        ways = progress["ways"]
+    else:
+        nodes = 0
+        
+    if "relations" in progrees:
+        relations = progress["relations"]
+    else:
+        relations = 0
+    
+    print "\rParsing XML: nodes(%d) ways(%d) relations(%d) done" % (nodes, ways, relations),
+    sys.stdout.flush()
+
+def reportWarning(w):
+    print w
+
 def reportError(e):
     print e
 
@@ -88,8 +110,11 @@ class SAXOSMParser(xml.sax.handler.ContentHandler):
     def printProgress(self):
         self.ticker += 1
         if self.ticker == 1000:
-            print "\rParsing XML: nodes(%d) ways(%d) relations(%d) done" % (len(self.nodes),len(self.ways),len(self.relations)),
-            sys.stdout.flush()
+            reportDetailedProgress({
+                "nodes":len(self.nodes),
+                "ways":len(self.ways),
+                "relations":len(self.relations),
+                })
             self.ticker = 0
         
     def startElement(self, name, attrs):
@@ -115,7 +140,7 @@ class SAXOSMParser(xml.sax.handler.ContentHandler):
             except:
                 import traceback
                 traceback.print_exc()
-                print "Aborting object parse due to exception"
+                reportWarning("Aborting object parse due to exception")
                 self.currentObject = None
         elif name == "node":
             try:
@@ -183,11 +208,11 @@ class SAXOSMParser(xml.sax.handler.ContentHandler):
         for way in self.ways.values():
             line = self.composeWay(way)
             if not line:
-                print "Way",way["id"],"is incomplete!"
+                reportWarning("Way %s is incomplete!" % (str(way["id"])))
                 incompleteCount += 1
             way["line"] = line
         if incompleteCount > 0:
-            print incompleteCount,"incomplete ways!"
+            reportWarning("%s incomplete ways!" % (str(incompleteCount)))
             
     def composeWay(self,way):
         """Compose a line from it's node refs into an array of coordinates"""
@@ -196,7 +221,7 @@ class SAXOSMParser(xml.sax.handler.ContentHandler):
             if nodeRef in self.nodes:
                 line.append(self.nodes[nodeRef]["point"])
             else:
-                print "Way",way["id"],"is incomplete!"
+                reportWarning("Way %s is incomplete!" % (str(way["id"])))
                 line = None
                 break
         return line
@@ -231,7 +256,7 @@ def composeMultipolygons(osmParser):
             endpoints = {}
             for way in lines:
                 if way["line"] == None:
-                    print "Multipolygon (%d) contains an incpomlete way! (%d)" % (id, way["id"])
+                    reportWarning("Multipolygon (%d) contains an incpomlete way! (%d)" % (id, way["id"]))
                     return None
                 start = way["nodes"][0]
                 end   = way["nodes"][-1]
@@ -244,7 +269,7 @@ def composeMultipolygons(osmParser):
             
             for ways in endpoints.values():
                 if len(ways) < 2:
-                    print "Multipolygon (%d) has an unclosed ring!" % (id)
+                    reportWarning("Multipolygon (%d) has an unclosed ring!" % (id))
                     return None
             
             remainingEndpoints = copy.copy(endpoints)
@@ -300,7 +325,7 @@ def composeMultipolygons(osmParser):
                 if line[0] == line[-1]:
                     composedLines.append(line)
                 else:
-                    print "Multipolygon (%d) ring is not closed!" % (id)
+                    reportWarning("Multipolygon (%d) ring is not closed!" % (id))
             return composedLines
         
         outerRings = composeLoops(outerLines)
@@ -327,7 +352,7 @@ def composeMultipolygons(osmParser):
                 name = None
                 if "name" in relation["tags"]:
                     name = relation["tags"]["name"]
-                print "Relation \"%s\" (%d) is incomplete!" % (name,id)
+                reportWarning("Relation \"%s\" (%d) is incomplete!" % (name,id))
                 incompleteCount += 1
             else:
                 multipolygons.append(relation)
@@ -513,7 +538,7 @@ def writeSimpleAreasToSQLite(db, ac, tags):
     
     for area in ac.areas:
         if area["line"]:
-            if not area["tags"]:
+            if not area["tags"] or not area["line"]:
                 continue
             mpoly = MultiPolygon([[area["line"],[]]])
             cur.execute("insert into world_polygon(osm_id,osm_type,way) values ((?),'W',GeomFromWKB((?),4326))", [area["id"], sqlite.Binary(mpoly.wkb)])
@@ -527,7 +552,7 @@ def writeLinesToSQLite(db, osmParser, tags):
     cur = db.cursor()
     
     for line in osmParser.ways.values():
-        if not line["tags"]:
+        if not line["tags"] or not line["line"]:
             continue
         linestring = LineString(line["line"])
         cur.execute("insert into world_line(osm_id,way) values ((?),GeomFromWKB((?),4326))", [line["id"],sqlite.Binary(linestring.wkb)])
@@ -603,6 +628,7 @@ def parseFile(osmfilename, db, config,  verbose=False, slim=False):
         if slim:
             osmParser.endElementFilters.append(InsertInline(tags, db))
         
+        reportStatus("Parsing OSM file...")
         osmParser.parse(file)
         
         osmParser.composeWays()
@@ -640,7 +666,6 @@ def parseFile(osmfilename, db, config,  verbose=False, slim=False):
         reportStatus("Creating indexes...")
         sqlCreateIndexes(db)
         
-        db.execute("vacuum")
         db.commit()
 
 defaultConfig = {
