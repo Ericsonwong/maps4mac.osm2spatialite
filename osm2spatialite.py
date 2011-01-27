@@ -23,10 +23,15 @@
 #hp = hpy()
 
 import sys, os.path
-import xml.sax, xml.sax.handler
 import copy
 import array
 import ctypes.util
+import OSMXMLParser, OSMMemStore
+
+try:
+    import OSMPBFParser
+except:
+    OSMPBFParser = None
 
 try:
     from shapely.geometry import Point,MultiPolygon,Polygon,LineString
@@ -60,23 +65,31 @@ def reportStatus(s):
     print s
 
 def reportDetailedProgress(progress):
-    if "nodes" in progrees:
+    if "nodes" in progress:
         nodes = progress["nodes"]
     else:
         nodes = 0
         
-    if "ways" in progrees:
+    if "ways" in progress:
         ways = progress["ways"]
     else:
         nodes = 0
         
-    if "relations" in progrees:
+    if "relations" in progress:
         relations = progress["relations"]
     else:
         relations = 0
     
-    print "\rParsing XML: nodes(%d) ways(%d) relations(%d) done" % (nodes, ways, relations),
+    if "filesize" in progress and "filepos" in progress:
+        percent = "%6.2f%%" % ((float(progress["filepos"]) / float(progress["filesize"])) * 100)
+    else:
+        percent = "???.??%"
+    
+    print "\rParsing XML: nodes(%d) ways(%d) relations(%d) (%s) done" % (nodes, ways, relations, percent),
     sys.stdout.flush()
+
+def reportEndParse():
+    print
 
 def reportWarning(w):
     print w
@@ -91,141 +104,31 @@ def polyWinding(poly):
         a += poly[i][0] * poly[i+1][1] - poly[i+1][0] * poly[i][1]
     #a = a / 2.0
     return bool(a > 0)
+        
+def composeWay(datastore,way):
+    """Compose a line from it's node refs into an array of coordinates"""
+    line = []
+    for nodeRef in way["nodes"]:
+        if nodeRef in datastore.nodes:
+            line.append(datastore.nodes[nodeRef]["point"])
+        else:
+            reportWarning("Way %s is incomplete!" % (str(way["id"])))
+            line = None
+            break
+    return line
 
-class SAXOSMParser(xml.sax.handler.ContentHandler):
-    def __init__(self):
-        self.endElementFilters = []
-        self.showProgress = False
-
-    def parse(self, file):
-        xml.sax.parse(file, self)
-
-    def startDocument(self):
-        self.ways  = {}
-        self.nodes = {}
-        self.relations = {}
-        self.currentObject = None
-        self.ticker = 0
+def composeWays(datastore):
+    """Compose all ways"""
+    incompleteCount = 0
+    for way in datastore.ways.values():
+        line = composeWay(datastore, way)
+        if not line:
+            reportWarning("Way %s is incomplete!" % (str(way["id"])))
+            incompleteCount += 1
+        way["line"] = line
+    if incompleteCount > 0:
+        reportWarning("%s incomplete ways!" % (str(incompleteCount)))
     
-    def printProgress(self):
-        self.ticker += 1
-        if self.ticker == 1000:
-            reportDetailedProgress({
-                "nodes":len(self.nodes),
-                "ways":len(self.ways),
-                "relations":len(self.relations),
-                })
-            self.ticker = 0
-        
-    def startElement(self, name, attrs):
-        if self.currentObject:
-            try:
-                if name == "member":
-                    member = {
-                        "type":intern(str(attrs.getValue("type"))),
-                        "ref":int(attrs.getValue("ref")),
-                        "role":intern(str(attrs.getValue("role"))),
-                    }
-                    self.currentObject["members"].append(member)
-                elif name == "nd":
-                    self.currentObject["nodes"].append(int(attrs.getValue("ref")))
-                elif name == "tag":
-                    key = intern(str(attrs.getValue("k")))
-                    value = attrs.getValue("v")
-                    try:
-                        value = intern(str(value))
-                    except UnicodeEncodeError:
-                        pass
-                    self.currentObject["tags"][key] = value
-            except:
-                import traceback
-                traceback.print_exc()
-                reportWarning("Aborting object parse due to exception")
-                self.currentObject = None
-        elif name == "node":
-            try:
-                version = int(attrs.getValue("version"))
-            except KeyError:
-                version = -1
-            self.currentObject = {
-                "tags":{},
-                "point":array.array('d',[float(attrs.getValue("lon")),float(attrs.getValue("lat"))]),
-                "id":int(attrs.getValue("id")),
-                "version":version
-            }
-        elif name == "way":
-            try:
-                version = int(attrs.getValue("version"))
-            except KeyError:
-                version = -1
-            self.currentObject = {
-                "tags":{},
-                "nodes":[],
-                "id":int(attrs.getValue("id")),
-                "version":version
-            }
-        elif name == "relation":
-            try:
-                version = int(attrs.getValue("version"))
-            except KeyError:
-                version = -1
-            self.currentObject = {
-                "tags":{},
-                "members":[],
-                "id":int(attrs.getValue("id")),
-                "version":version
-            }
-                
-    
-    def endElement(self, name):
-        if not self.currentObject:
-            return
-        
-        for filter in self.endElementFilters:
-            self.currentObject = filter.testElement(name, self.currentObject)
-        
-        if name == "node":
-            self.nodes[self.currentObject["id"]] = self.currentObject
-            self.currentObject = None
-        elif name == "way":
-            self.currentObject["nodes"] = array.array('i', self.currentObject["nodes"])
-            self.ways[self.currentObject["id"]] = self.currentObject
-            self.currentObject = None
-        elif name == "relation":
-            self.relations[self.currentObject["id"]] = self.currentObject
-            self.currentObject = None
-        
-        if self.showProgress:
-            self.printProgress()
-        
-    def endDocument(self):
-        if self.showProgress:
-            print
-            
-    def composeWays(self):
-        """Compose all ways"""
-        incompleteCount = 0
-        for way in self.ways.values():
-            line = self.composeWay(way)
-            if not line:
-                reportWarning("Way %s is incomplete!" % (str(way["id"])))
-                incompleteCount += 1
-            way["line"] = line
-        if incompleteCount > 0:
-            reportWarning("%s incomplete ways!" % (str(incompleteCount)))
-            
-    def composeWay(self,way):
-        """Compose a line from it's node refs into an array of coordinates"""
-        line = []
-        for nodeRef in way["nodes"]:
-            if nodeRef in self.nodes:
-                line.append(self.nodes[nodeRef]["point"])
-            else:
-                reportWarning("Way %s is incomplete!" % (str(way["id"])))
-                line = None
-                break
-        return line
-        
 
 def composeMultipolygons(osmParser):
     """Compose the line segments that make up a multipolygon into closed rings"""
@@ -255,7 +158,8 @@ def composeMultipolygons(osmParser):
         def composeLoops(lines):
             endpoints = {}
             for way in lines:
-                if way["line"] == None:
+                line = composeWay(osmParser, way)
+                if line == None:
                     reportWarning("Multipolygon (%d) contains an incpomlete way! (%d)" % (id, way["id"]))
                     return None
                 start = way["nodes"][0]
@@ -279,13 +183,15 @@ def composeMultipolygons(osmParser):
                 point,ways = remainingEndpoints.items()[0]
                 lastWay = ways[0]
                 if lastWay["nodes"][0] == point:
-                    line  = ways[0]["line"][:]
+                    #line  = ways[0]["line"][:]
+                    line  = composeWay(osmParser, ways[0])
                     start = ways[0]["nodes"][0]
                     end   = ways[0]["nodes"][-1]
                     del remainingEndpoints[start][0]
                     #del remainingEndpoints[start]
                 else:
-                    line  = ways[0]["line"][:]
+                    #line  = ways[0]["line"][:]
+                    line  = composeWay(osmParser, ways[0])
                     line.reverse()
                     start = ways[0]["nodes"][-1]
                     end   = ways[0]["nodes"][0]
@@ -302,7 +208,8 @@ def composeMultipolygons(osmParser):
                         nextWay = ways[1]
                         
                     # find out which end they connect at
-                    nextLine = nextWay["line"][:]
+                    #nextLine = nextWay["line"][:]
+                    nextLine  = composeWay(osmParser, nextWay)
                     newEnd = nextWay["nodes"][-1]
                     if nextWay["nodes"][0] != end:
                         # start to start, flip the new line
@@ -345,14 +252,14 @@ def composeMultipolygons(osmParser):
         outerRings.extend(innerRings)
         return outerRings
             
-    for id,relation in osmParser.relations.items():
+    for objID,relation in osmParser.relations.items():
         if "type" in relation["tags"] and (relation["tags"]["type"] == "multipolygon" or relation["tags"]["type"] == "boundary"):
-            result = composeMultipolygon(id,relation)
+            result = composeMultipolygon(objID,relation)
             if not result:
                 name = None
                 if "name" in relation["tags"]:
                     name = relation["tags"]["name"]
-                reportWarning("Relation \"%s\" (%d) is incomplete!" % (name,id))
+                reportWarning("Relation \"%s\" (%d) is incomplete!" % (name,objID))
                 incompleteCount += 1
             else:
                 multipolygons.append(relation)
@@ -441,7 +348,6 @@ class AreaColector():
                     if key in object["tags"]:
                         if self.areaTags[key] is None or object["tags"][key] in self.areaTags[key]:
                             self.areas.append(object)
-                            object["area"] = True
                             break
         return object
 
@@ -533,34 +439,35 @@ def writeMpolysToSQLite(db, mpolys, tags):
                 sql = "update world_polygon set \"%s\" = ? where rowid == (?)" % (tag)
                 cur.execute(sql, [mpoly["tags"][tag], rowid])
     
-def writeSimpleAreasToSQLite(db, ac, tags):    
+def writeSimpleAreasToSQLite(db, datastore, ac, tags):    
     cur = db.cursor()
     
     for area in ac.areas:
-        if area["line"]:
-            if not area["tags"] or not area["line"]:
-                continue
-            mpoly = MultiPolygon([[area["line"],[]]])
-            cur.execute("insert into world_polygon(osm_id,osm_type,way) values ((?),'W',GeomFromWKB((?),4326))", [area["id"], sqlite.Binary(mpoly.wkb)])
-            rowid = cur.lastrowid
-            for tag in tags:
-                if tag in area["tags"]:
-                    sql = "update world_polygon set \"%s\" = ? where rowid == (?)" % (tag)
-                    cur.execute(sql, [area["tags"][tag], rowid])
-
-def writeLinesToSQLite(db, osmParser, tags):    
-    cur = db.cursor()
-    
-    for line in osmParser.ways.values():
-        if not line["tags"] or not line["line"]:
+        line = composeWay(datastore, area)
+        if not line or not area["tags"]:
             continue
-        linestring = LineString(line["line"])
-        cur.execute("insert into world_line(osm_id,way) values ((?),GeomFromWKB((?),4326))", [line["id"],sqlite.Binary(linestring.wkb)])
+        mpoly = MultiPolygon([[line,[]]])
+        cur.execute("insert into world_polygon(osm_id,osm_type,way) values ((?),'W',GeomFromWKB((?),4326))", [area["id"], sqlite.Binary(mpoly.wkb)])
         rowid = cur.lastrowid
         for tag in tags:
-            if tag in line["tags"]:
+            if tag in area["tags"]:
+                sql = "update world_polygon set \"%s\" = ? where rowid == (?)" % (tag)
+                cur.execute(sql, [area["tags"][tag], rowid])
+
+def writeLinesToSQLite(db, datastore, tags):    
+    cur = db.cursor()
+    
+    for way in datastore.ways.values():
+        line = composeWay(datastore, way)
+        if not way["tags"] or not line:
+            continue
+        linestring = LineString(line)
+        cur.execute("insert into world_line(osm_id,way) values ((?),GeomFromWKB((?),4326))", [way["id"],sqlite.Binary(linestring.wkb)])
+        rowid = cur.lastrowid
+        for tag in tags:
+            if tag in way["tags"]:
                 sql = "update world_line set \"%s\" = ? where rowid == (?)" % (tag)
-                cur.execute(sql, [line["tags"][tag], rowid])
+                cur.execute(sql, [way["tags"][tag], rowid])
 
 def writeNodesToSQLite(db, osmParser, tags):
     cur = db.cursor()
@@ -613,60 +520,70 @@ def sqlCreateIndexes(db):
 
 def parseFile(osmfilename, db, config,  verbose=False, slim=False):
     #slim = True
-    with open(osmfilename) as file:
-        osmParser = SAXOSMParser()
-        osmParser.showProgress = verbose
-        
-        reportStatus("Initialzing SQLite DB...")
-        tags = config["tags"]
-        initializeSqlite(db, tags)
-        
-        ac = AreaColector(config["area_tags"])
-        
-        osmParser.endElementFilters.append(ac)
-        osmParser.endElementFilters.append(LayerToZOrder())
-        if slim:
-            osmParser.endElementFilters.append(InsertInline(tags, db))
-        
-        reportStatus("Parsing OSM file...")
-        osmParser.parse(file)
-        
-        osmParser.composeWays()
-        mpolys = composeMultipolygons(osmParser)
-        
-        print len(osmParser.relations), "relations"
-        print len(osmParser.nodes), "nodes"
-        print len(osmParser.ways), "ways"
-        
-        print len(mpolys), "multipolygons"
-        print len(ac.areas), "areas"
-        
-        reportStatus("Writing multipolygons...")
-        writeMpolysToSQLite(db, mpolys, tags)
-        reportStatus("Writing simple areas...")
-        writeSimpleAreasToSQLite(db, ac, tags)
-        
-        # Trim areas out of the lines table
-        for area in ac.areas:
-            if area["id"] in osmParser.ways:
-                del osmParser.ways[area["id"]]
-            else:
-                print "Huh?",area["id"]
-                print area["tags"]
-        
-        reportStatus("Writing lines...")
-        writeLinesToSQLite(db, osmParser, tags)
-        if not slim:
-            reportStatus("Writing nodes...")
-            writeNodesToSQLite(db, osmParser, tags)
-        reportStatus("Calculating values in SQL...")
-        sqlCalculateValues(db)
-        reportStatus("Copying values to world_roads...")
-        sqlDoRoads(db, tags)
-        reportStatus("Creating indexes...")
-        sqlCreateIndexes(db)
-        
-        db.commit()
+    if osmfilename.endswith(".osm.pbf"):
+        if OSMPBFParser:
+            osmParser = OSMPBFParser.OSMPBFParser()
+        else:
+            reportError("Couldn't load PBF modules")
+            return
+    else:
+        osmParser = OSMXMLParser.OSMXMLParser()
+    
+    datastore = OSMMemStore.OSMMemStore()
+    osmParser.reportProgress = reportDetailedProgress
+    osmParser.reportWarning  = reportWarning
+    osmParser.reportFinished = reportEndParse
+    
+    reportStatus("Initialzing SQLite DB...")
+    tags = config["tags"]
+    initializeSqlite(db, tags)
+    
+    ac = AreaColector(config["area_tags"])
+    
+    osmParser.endElementFilters.append(ac)
+    osmParser.endElementFilters.append(LayerToZOrder())
+    if slim:
+        osmParser.endElementFilters.append(InsertInline(tags, db))
+    
+    reportStatus("Parsing OSM file...")
+    osmParser.parse(osmfilename, datastore)
+    
+    #composeWays(osmParser)
+    mpolys = composeMultipolygons(datastore)
+    
+    print len(datastore.relations), "relations"
+    print len(datastore.nodes), "nodes"
+    print len(datastore.ways), "ways"
+    
+    print len(mpolys), "multipolygons"
+    print len(ac.areas), "areas"
+    
+    reportStatus("Writing multipolygons...")
+    writeMpolysToSQLite(db, mpolys, tags)
+    reportStatus("Writing simple areas...")
+    writeSimpleAreasToSQLite(db, datastore, ac, tags)
+    
+    # Trim areas out of the lines table
+    for area in ac.areas:
+        if area["id"] in datastore.ways:
+            del datastore.ways[area["id"]]
+        else:
+            print "Huh?",area["id"]
+            print area["tags"]
+    
+    reportStatus("Writing lines...")
+    writeLinesToSQLite(db, datastore, tags)
+    if not slim:
+        reportStatus("Writing nodes...")
+        writeNodesToSQLite(db, datastore, tags)
+    reportStatus("Calculating values in SQL...")
+    sqlCalculateValues(db)
+    reportStatus("Copying values to world_roads...")
+    sqlDoRoads(db, tags)
+    reportStatus("Creating indexes...")
+    sqlCreateIndexes(db)
+    
+    db.commit()
 
 defaultConfig = {
 "area_tags": {

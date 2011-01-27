@@ -38,10 +38,10 @@ class osm2spatialiteAppDelegate(NSObject):
         defaults = NSUserDefaults.standardUserDefaults()
         
         try:
-            import fileformat_pb2,osmformat_pb2
-            hasProtoBuf = True
+            import OSMPBFParser
+            self.hasProtoBuf = True
         except ImportError:
-            hasProtoBuf = False
+            self.hasProtoBuf = False
         
         try:
             import shapely,shapely.geos
@@ -78,8 +78,8 @@ class osm2spatialiteAppDelegate(NSObject):
         panel.setAllowsOtherFileTypes_(True)
         panel.setCanSelectHiddenExtension_(True)
         filetypes = ["osm"]
-        #if self.hasProtoBuf:
-        #    filetypes.append("pbf")
+        if self.hasProtoBuf:
+            filetypes.append("pbf")
         if NSOKButton == panel.runModalForDirectory_file_types_(NSHomeDirectory(), None, filetypes):
             filename = panel.filename()
             self.inputFilenameField.setStringValue_(filename)

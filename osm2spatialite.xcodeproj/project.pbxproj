@@ -14,6 +14,11 @@
 		8D11072B0486CEB800E47090 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C165CFE840E0CC02AAC07 /* InfoPlist.strings */; };
 		8D11072D0486CEB800E47090 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 29B97316FDCFA39411CA2CEA /* main.m */; settings = {ATTRIBUTES = (); }; };
 		8D11072F0486CEB800E47090 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1058C7A1FEA54F0111CA2CBB /* Cocoa.framework */; };
+		ED21646112F1F50900629334 /* OSMXMLParser.py in Resources */ = {isa = PBXBuildFile; fileRef = ED21646012F1F50900629334 /* OSMXMLParser.py */; };
+		ED21646512F1F51800629334 /* OSMPBFParser.py in Resources */ = {isa = PBXBuildFile; fileRef = ED21646412F1F51800629334 /* OSMPBFParser.py */; };
+		ED21646912F1FB8500629334 /* OSMMemStore.py in Resources */ = {isa = PBXBuildFile; fileRef = ED21646812F1FB8500629334 /* OSMMemStore.py */; };
+		ED2164A712F22F7D00629334 /* fileformat_pb2.py in Resources */ = {isa = PBXBuildFile; fileRef = ED2164A512F22F7D00629334 /* fileformat_pb2.py */; };
+		ED2164A812F22F7D00629334 /* osmformat_pb2.py in Resources */ = {isa = PBXBuildFile; fileRef = ED2164A612F22F7D00629334 /* osmformat_pb2.py */; };
 		EDA8F86C12E44DE30057F52F /* osm2spatialite.py in Resources */ = {isa = PBXBuildFile; fileRef = EDA8F86B12E44DE30057F52F /* osm2spatialite.py */; };
 		EDA8F91F12E456D80057F52F /* shapely in Resources */ = {isa = PBXBuildFile; fileRef = EDA8F90212E456D80057F52F /* shapely */; };
 		EDD5363C12E5EC2600702161 /* osm2spatialite.icns in Resources */ = {isa = PBXBuildFile; fileRef = EDD5363B12E5EC2600702161 /* osm2spatialite.icns */; };
@@ -33,6 +38,11 @@
 		77C8C1F80C07829500965286 /* English */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = English; path = English.lproj/MainMenu.xib; sourceTree = "<group>"; };
 		8D1107310486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8D1107320486CEB800E47090 /* osm2spatialite.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = osm2spatialite.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		ED21646012F1F50900629334 /* OSMXMLParser.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = OSMXMLParser.py; sourceTree = "<group>"; };
+		ED21646412F1F51800629334 /* OSMPBFParser.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = OSMPBFParser.py; sourceTree = "<group>"; };
+		ED21646812F1FB8500629334 /* OSMMemStore.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = OSMMemStore.py; sourceTree = "<group>"; };
+		ED2164A512F22F7D00629334 /* fileformat_pb2.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = fileformat_pb2.py; sourceTree = "<group>"; };
+		ED2164A612F22F7D00629334 /* osmformat_pb2.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = osmformat_pb2.py; sourceTree = "<group>"; };
 		EDA8F86B12E44DE30057F52F /* osm2spatialite.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = osm2spatialite.py; sourceTree = "<group>"; };
 		EDA8F90212E456D80057F52F /* shapely */ = {isa = PBXFileReference; lastKnownFileType = folder; path = shapely; sourceTree = "<group>"; };
 		EDD5363B12E5EC2600702161 /* osm2spatialite.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = osm2spatialite.icns; sourceTree = "<group>"; };
@@ -54,6 +64,9 @@
 		080E96DDFE201D6D7F000001 /* Classes */ = {
 			isa = PBXGroup;
 			children = (
+				ED21646812F1FB8500629334 /* OSMMemStore.py */,
+				ED21646412F1F51800629334 /* OSMPBFParser.py */,
+				ED21646012F1F50900629334 /* OSMXMLParser.py */,
 				7790198E0C07548A00326F66 /* osm2spatialiteAppDelegate.py */,
 				EDA8F86B12E44DE30057F52F /* osm2spatialite.py */,
 			);
@@ -102,6 +115,8 @@
 		29B97315FDCFA39411CA2CEA /* Other Sources */ = {
 			isa = PBXGroup;
 			children = (
+				ED2164A512F22F7D00629334 /* fileformat_pb2.py */,
+				ED2164A612F22F7D00629334 /* osmformat_pb2.py */,
 				EDA8F90212E456D80057F52F /* shapely */,
 				32CA4F630368D1EE00C91783 /* osm2spatialite_Prefix.pch */,
 				29B97316FDCFA39411CA2CEA /* main.m */,
@@ -187,6 +202,11 @@
 				EDA8F86C12E44DE30057F52F /* osm2spatialite.py in Resources */,
 				EDA8F91F12E456D80057F52F /* shapely in Resources */,
 				EDD5363C12E5EC2600702161 /* osm2spatialite.icns in Resources */,
+				ED21646112F1F50900629334 /* OSMXMLParser.py in Resources */,
+				ED21646512F1F51800629334 /* OSMPBFParser.py in Resources */,
+				ED21646912F1FB8500629334 /* OSMMemStore.py in Resources */,
+				ED2164A712F22F7D00629334 /* fileformat_pb2.py in Resources */,
+				ED2164A812F22F7D00629334 /* osmformat_pb2.py in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
