@@ -114,7 +114,7 @@ class OSMPBFParser():
                 osm_id = osm_id + last_id
                 lat = lat + last_lat
                 lon = lon + last_lon
-                yield {"id":osm_id, "point":[lat, lon], "tags":tags, "version":-1}
+                yield {"id":osm_id, "point":[lon, lat], "tags":tags, "version":-1}
                 last_id  = osm_id
                 last_lat = lat
                 last_lon = lon
@@ -128,7 +128,7 @@ class OSMPBFParser():
                 lat = .000000001 * (lat_offset + (granularity * node.lat))
                 lon = .000000001 * (lon_offset + (granularity * node.lon))
                 
-                self.parsedNode({"id":node.id, "point":[lat, lon], "tags":tags, "version":-1})
+                self.parsedNode({"id":node.id, "point":[lon, lat], "tags":tags, "version":-1})
             if group.dense:
                 #print "Dense: Nodes:", len(group.dense.id)
                 for node in denseYielder(group.dense, self.pb.stringtable.s):
