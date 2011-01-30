@@ -340,7 +340,7 @@ class AreaColector():
     def testElement(self, type, object):
         """type: A string representing the type of object being tested
         object: the object"""
-        if type == "way":
+        if type == "way" and object["nodes"]:
             # Is it closed?
             if object["nodes"][0] == object["nodes"][-1]:
                 for key in self.areaTags.keys():
@@ -351,12 +351,14 @@ class AreaColector():
                             break
         return object
 
-class LayerToZOrder():
-    """Coply the layer key to z_order for later calculations"""
+class CopyTagValue():
+    def __init__(self, fromtag, totag):
+        self.fromtag = fromtag
+        self.totag   = totag
     
     def testElement(self, type, object):
-        if "layer" in object["tags"]:
-            object["tags"]["z_order"] = object["tags"]["layer"]
+        if self.fromtag in object["tags"]:
+            object["tags"][self.totag] = object["tags"][self.fromtag]
         return object
 
 class InsertInline():
@@ -541,7 +543,7 @@ def parseFile(osmfilename, db, config,  verbose=False, slim=False):
     ac = AreaColector(config["area_tags"])
     
     osmParser.endElementFilters.append(ac)
-    osmParser.endElementFilters.append(LayerToZOrder())
+    osmParser.endElementFilters.append(CopyTagValue(fromtag="layer", totag="z_order"))
     if slim:
         osmParser.endElementFilters.append(InsertInline(tags, db))
     
