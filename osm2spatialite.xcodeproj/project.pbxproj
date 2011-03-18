@@ -64,11 +64,7 @@
 		080E96DDFE201D6D7F000001 /* Classes */ = {
 			isa = PBXGroup;
 			children = (
-				ED21646812F1FB8500629334 /* OSMMemStore.py */,
-				ED21646412F1F51800629334 /* OSMPBFParser.py */,
-				ED21646012F1F50900629334 /* OSMXMLParser.py */,
 				7790198E0C07548A00326F66 /* osm2spatialiteAppDelegate.py */,
-				EDA8F86B12E44DE30057F52F /* osm2spatialite.py */,
 			);
 			name = Classes;
 			sourceTree = "<group>";
@@ -103,6 +99,7 @@
 		29B97314FDCFA39411CA2CEA /* osm2spatialite */ = {
 			isa = PBXGroup;
 			children = (
+				ED954B8B130628EB00A8EA1F /* Shared Files */,
 				080E96DDFE201D6D7F000001 /* Classes */,
 				29B97315FDCFA39411CA2CEA /* Other Sources */,
 				29B97317FDCFA39411CA2CEA /* Resources */,
@@ -115,8 +112,6 @@
 		29B97315FDCFA39411CA2CEA /* Other Sources */ = {
 			isa = PBXGroup;
 			children = (
-				ED2164A512F22F7D00629334 /* fileformat_pb2.py */,
-				ED2164A612F22F7D00629334 /* osmformat_pb2.py */,
 				EDA8F90212E456D80057F52F /* shapely */,
 				32CA4F630368D1EE00C91783 /* osm2spatialite_Prefix.pch */,
 				29B97316FDCFA39411CA2CEA /* main.m */,
@@ -143,6 +138,27 @@
 				1058C7A2FEA54F0111CA2CBB /* Other Frameworks */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		ED954B8B130628EB00A8EA1F /* Shared Files */ = {
+			isa = PBXGroup;
+			children = (
+				ED21646812F1FB8500629334 /* OSMMemStore.py */,
+				ED21646412F1F51800629334 /* OSMPBFParser.py */,
+				ED21646012F1F50900629334 /* OSMXMLParser.py */,
+				EDA8F86B12E44DE30057F52F /* osm2spatialite.py */,
+				ED954B8C1306290100A8EA1F /* PBF Formats */,
+			);
+			name = "Shared Files";
+			sourceTree = "<group>";
+		};
+		ED954B8C1306290100A8EA1F /* PBF Formats */ = {
+			isa = PBXGroup;
+			children = (
+				ED2164A512F22F7D00629334 /* fileformat_pb2.py */,
+				ED2164A612F22F7D00629334 /* osmformat_pb2.py */,
+			);
+			name = "PBF Formats";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

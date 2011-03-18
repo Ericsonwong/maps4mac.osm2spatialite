@@ -85,7 +85,7 @@ def reportDetailedProgress(progress):
     else:
         percent = "???.??%"
     
-    print "\rParsing XML: nodes(%d) ways(%d) relations(%d) (%s) done" % (nodes, ways, relations, percent),
+    print "\rParsing OSM File: nodes(%d) ways(%d) relations(%d) (%s) done" % (nodes, ways, relations, percent),
     sys.stdout.flush()
 
 def reportEndParse():
@@ -120,7 +120,7 @@ def composeWay(datastore,way):
 def composeWays(datastore):
     """Compose all ways"""
     incompleteCount = 0
-    for way in datastore.ways.values():
+    for way in datastore.ways.itervalues():
         line = composeWay(datastore, way)
         if not line:
             reportWarning("Way %s is incomplete!" % (str(way["id"])))
@@ -128,9 +128,8 @@ def composeWays(datastore):
         way["line"] = line
     if incompleteCount > 0:
         reportWarning("%s incomplete ways!" % (str(incompleteCount)))
-    
 
-def composeMultipolygons(osmParser):
+def composeMultipolygons(datastore):
     """Compose the line segments that make up a multipolygon into closed rings"""
     incompleteCount = 0
     
@@ -142,11 +141,11 @@ def composeMultipolygons(osmParser):
         
         for member in relation["members"]:
             if member["type"] == "way":
-                if member["ref"] in osmParser.ways:
+                if member["ref"] in datastore.ways:
                     if member["role"] == "outer":
-                        outerLines.append(osmParser.ways[member["ref"]])
+                        outerLines.append(datastore.ways[member["ref"]])
                     elif member["role"] == "inner":
-                        innerLines.append(osmParser.ways[member["ref"]])
+                        innerLines.append(datastore.ways[member["ref"]])
                 else:
                     return None
         
@@ -158,7 +157,7 @@ def composeMultipolygons(osmParser):
         def composeLoops(lines):
             endpoints = {}
             for way in lines:
-                line = composeWay(osmParser, way)
+                line = composeWay(datastore, way)
                 if line == None:
                     reportWarning("Multipolygon (%d) contains an incpomlete way! (%d)" % (id, way["id"]))
                     return None
@@ -184,14 +183,14 @@ def composeMultipolygons(osmParser):
                 lastWay = ways[0]
                 if lastWay["nodes"][0] == point:
                     #line  = ways[0]["line"][:]
-                    line  = composeWay(osmParser, ways[0])
+                    line  = composeWay(datastore, ways[0])
                     start = ways[0]["nodes"][0]
                     end   = ways[0]["nodes"][-1]
                     del remainingEndpoints[start][0]
                     #del remainingEndpoints[start]
                 else:
                     #line  = ways[0]["line"][:]
-                    line  = composeWay(osmParser, ways[0])
+                    line  = composeWay(datastore, ways[0])
                     line.reverse()
                     start = ways[0]["nodes"][-1]
                     end   = ways[0]["nodes"][0]
@@ -209,7 +208,7 @@ def composeMultipolygons(osmParser):
                         
                     # find out which end they connect at
                     #nextLine = nextWay["line"][:]
-                    nextLine  = composeWay(osmParser, nextWay)
+                    nextLine  = composeWay(datastore, nextWay)
                     newEnd = nextWay["nodes"][-1]
                     if nextWay["nodes"][0] != end:
                         # start to start, flip the new line
@@ -252,14 +251,14 @@ def composeMultipolygons(osmParser):
         outerRings.extend(innerRings)
         return outerRings
             
-    for objID,relation in osmParser.relations.items():
+    for relation in datastore.relations.itervalues():
         if "type" in relation["tags"] and (relation["tags"]["type"] == "multipolygon" or relation["tags"]["type"] == "boundary"):
-            result = composeMultipolygon(objID,relation)
+            result = composeMultipolygon(relation["id"],relation)
             if not result:
                 name = None
                 if "name" in relation["tags"]:
                     name = relation["tags"]["name"]
-                reportWarning("Relation \"%s\" (%d) is incomplete!" % (name,objID))
+                reportWarning("Relation \"%s\" (%d) is incomplete!" % (name,relation["id"]))
                 incompleteCount += 1
             else:
                 multipolygons.append(relation)
@@ -459,7 +458,7 @@ def writeSimpleAreasToSQLite(db, datastore, ac, tags):
 def writeLinesToSQLite(db, datastore, tags):    
     cur = db.cursor()
     
-    for way in datastore.ways.values():
+    for way in datastore.ways.itervalues():
         line = composeWay(datastore, way)
         if not way["tags"] or not line:
             continue
@@ -471,10 +470,10 @@ def writeLinesToSQLite(db, datastore, tags):
                 sql = "update world_line set \"%s\" = ? where rowid == (?)" % (tag)
                 cur.execute(sql, [way["tags"][tag], rowid])
 
-def writeNodesToSQLite(db, osmParser, tags):
+def writeNodesToSQLite(db, datastore, tags):
     cur = db.cursor()
     
-    for node in osmParser.nodes.values():
+    for node in datastore.nodes.itervalues():
         if not node["tags"]:
             continue
         point = Point(node["point"])
@@ -589,10 +588,10 @@ def parseFile(osmfilename, db, config,  verbose=False, slim=False):
 
 defaultConfig = {
 "area_tags": {
- "amenity":["parking"],
+ "amenity": None,
  "area":["yes"],
  "boundary": None,
- "building":["yes"],
+ "building": None, #FIXME: Should exclude building=no?
  "historic": None,
  "leisure": None,
  "landuse": None,
@@ -702,7 +701,6 @@ def main():
     db = trydb(dbfilename, force)
 
     if db:
-        #print "Importing \"%s\" to \"%s\"" % (dbfilename, osmfilename)
         print "Importing %s" % osmfilename
         parseFile(osmfilename, db, config=config, verbose=verbose)
 
