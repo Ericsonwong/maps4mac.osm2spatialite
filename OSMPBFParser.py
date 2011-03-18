@@ -94,7 +94,7 @@ class OSMPBFParser():
                     tags = {}
                 else:
                     i += 1
-                    tags[stringtable[key]] = stringtable[kv[i]]
+                    tags[stringtable[key].decode("utf-8")] = stringtable[kv[i]].decode("utf-8")
                 i += 1
         
         def denseYielder(dense, stringtable):
@@ -123,7 +123,7 @@ class OSMPBFParser():
             for node in group.nodes:
                 tags = {}
                 for k,v in zip(node.keys, node.vals):
-                    tags[self.pb.stringtable.s[k]] = self.pb.stringtable.s[v]
+                    tags[self.pb.stringtable.s[k].decode("utf-8")] = self.pb.stringtable.s[v].decode("utf-8")
                     
                 lat = .000000001 * (lat_offset + (granularity * node.lat))
                 lon = .000000001 * (lon_offset + (granularity * node.lon))
@@ -136,7 +136,7 @@ class OSMPBFParser():
             for way in group.ways:
                 tags = {}
                 for k,v in zip(way.keys, way.vals):
-                    tags[self.pb.stringtable.s[k]] = self.pb.stringtable.s[v]
+                    tags[self.pb.stringtable.s[k].decode("utf-8")] = self.pb.stringtable.s[v].decode("utf-8")
                 
                 refs = []
                 last_ref = 0
@@ -149,7 +149,7 @@ class OSMPBFParser():
             for rel in group.relations:
                 tags = {}
                 for k,v in zip(rel.keys, rel.vals):
-                    tags[self.pb.stringtable.s[k]] = self.pb.stringtable.s[v]
+                    tags[self.pb.stringtable.s[k].decode("utf-8")] = self.pb.stringtable.s[v].decode("utf-8")
                 
                 members = []
                 last_ref = 0
