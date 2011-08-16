@@ -106,19 +106,25 @@ class osm2spatialiteAppDelegate(NSObject):
     def importThread_(self, args):
         pool = NSAutoreleasePool.alloc().init()
         
-        config = copy.deepcopy(osm2spatialite.defaultConfig)
-        if "tags" in args:
-            config["tags"] = args["tags"][:]
-        
-        self.performSelectorOnMainThread_withObject_waitUntilDone_("mainThreadUpdate:", "Hello from the thread", False)
-        osm2spatialite.reportStatus = self.importReportStatus
-        osm2spatialite.reportDetailedProgress = self.importReportDetails
-        db = osm2spatialite.trydb(args["outfile"], True)
-        if db:
-            osm2spatialite.parseFile(args["infile"], db, config=config, verbose=True)
-            self.performSelectorOnMainThread_withObject_waitUntilDone_("mainThreadImportDone:", args["outfile"], False)
-        else:
-            self.performSelectorOnMainThread_withObject_waitUntilDone_("mainThreadAbortMsg:", "Could not open DB", False)
+        try:
+            config = copy.deepcopy(osm2spatialite.defaultConfig)
+            if "tags" in args:
+                config["tags"] = args["tags"][:]
+            
+            self.performSelectorOnMainThread_withObject_waitUntilDone_("mainThreadUpdate:", "Hello from the thread", False)
+            osm2spatialite.reportStatus = self.importReportStatus
+            osm2spatialite.reportDetailedProgress = self.importReportDetails
+            db = osm2spatialite.trydb(args["outfile"], True)
+            if db:
+                osm2spatialite.parseFile(args["infile"], db, config=config, verbose=True)
+                self.performSelectorOnMainThread_withObject_waitUntilDone_("mainThreadImportDone:", args["outfile"], False)
+            else:
+                self.performSelectorOnMainThread_withObject_waitUntilDone_("mainThreadAbortMsg:", "Could not open DB", False)
+        except Exception, e:
+            import traceback
+            err = str(e) + "\n" + traceback.format_exc()
+            print err
+            self.performSelectorOnMainThread_withObject_waitUntilDone_("mainThreadAbortMsg:", err, False)
     
     def mainThreadUpdate_(self, msg):
         self.importWindowCurrentStage.setStringValue_(msg)
@@ -149,7 +155,10 @@ class osm2spatialiteAppDelegate(NSObject):
         
         title = "Import Completed"
         msg = "The database was successfully created:\n" + msg
-        alert = NSAlert.alertWithMessageText_defaultButton_alternateButton_otherButton_informativeTextWithFormat_(title, None, None, None, msg)
+        
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_(title)
+        alert.setInformativeText_(msg) # Use this instead of informativeTextWithFormat to avoid % related errors
         alert.runModal()
     
     def mainThreadAbortMsg_(self, msg):
@@ -158,7 +167,9 @@ class osm2spatialiteAppDelegate(NSObject):
         self.importWindowCurrentStagePercent.stopAnimation_(self)
         
         title = "Import failed"
-        alert = NSAlert.alertWithMessageText_defaultButton_alternateButton_otherButton_informativeTextWithFormat_(title, None, None, None, msg)
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_(title)
+        alert.setInformativeText_(msg) # Use this instead of informativeTextWithFormat to avoid % related errors
         alert.runModal()
     
     @objc.IBAction
