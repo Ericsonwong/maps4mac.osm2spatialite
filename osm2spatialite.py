@@ -28,11 +28,17 @@ import array
 import ctypes.util
 import OSMXMLParser, OSMMemStore
 
+# The following is a hack to avoid unicode errors when printing errors:
+import sys
+import codecs
+sys.stdout = codecs.getwriter('utf8')(sys.stdout)
+
 try:
     import OSMPBFParser
 except:
     OSMPBFParser = None
 
+# The following is a huge hack:
 try:
     from shapely.geometry import Point,MultiPolygon,Polygon,LineString
 except OSError:
@@ -115,6 +121,12 @@ def composeWay(datastore,way):
             reportWarning("Way %s is incomplete!" % (str(way["id"])))
             line = None
             break
+    if not line:
+        reportWarning("Way %s has no nodes!" % (str(way["id"])))
+        return None
+    elif len(line) <= 1:
+        reportWarning("Way %s only one node!" % (str(way["id"])))
+        return None
     return line
 
 def composeWays(datastore):
@@ -171,7 +183,7 @@ def composeMultipolygons(datastore):
                         endpoints[point] = [way]
             
             for ways in endpoints.values():
-                if len(ways) < 2:
+                if len(ways) % 2 != 0:
                     reportWarning("Multipolygon (%d) has an unclosed ring!" % (id))
                     return None
             
@@ -599,6 +611,11 @@ defaultConfig = {
  "natural": None,
  "sport": None,
  "place": None,
+ "waterway": ["dam", "dock"],
+ "railway": ["station"],
+ "aeroway": ["aerodrome", "terminal", "helipad", "apron"],
+ "aerialway": ["station"],
+ "power": ["station", "sub_station", "generator"],
 },
         
 "tags": ['access', 'addr:flats', 'addr:housenumber', 'addr:interpolation', 'admin_level', 'aerialway', 
@@ -701,7 +718,7 @@ def main():
     db = trydb(dbfilename, force)
 
     if db:
-        print "Importing %s" % osmfilename
+        print u"Importing %s" % osmfilename
         parseFile(osmfilename, db, config=config, verbose=verbose)
 
 if __name__ == "__main__":
