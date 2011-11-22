@@ -23,10 +23,11 @@
 #hp = hpy()
 
 import sys, os.path
+import platform
 import copy
 import array
 import ctypes.util
-import OSMXMLParser, OSMMemStore
+import OSMXMLParser, OSMMemStore, OSMSQLiteStore
 
 # The following is a hack to avoid unicode errors when printing errors:
 import sys
@@ -113,10 +114,11 @@ def polyWinding(poly):
         
 def composeWay(datastore,way):
     """Compose a line from it's node refs into an array of coordinates"""
-    line = []
+    line = []            
     for nodeRef in way["nodes"]:
-        if nodeRef in datastore.nodes:
-            line.append(datastore.nodes[nodeRef]["point"])
+        node = datastore.getNode(nodeRef)
+        if node is not None:
+            line.append(node["point"])
         else:
             reportWarning("Way %s is incomplete!" % (str(way["id"])))
             line = None
@@ -129,10 +131,11 @@ def composeWay(datastore,way):
         return None
     return line
 
+# not used at the moment
 def composeWays(datastore):
     """Compose all ways"""
     incompleteCount = 0
-    for way in datastore.ways.itervalues():
+    for way in datastore.getWaysIter():
         line = composeWay(datastore, way)
         if not line:
             reportWarning("Way %s is incomplete!" % (str(way["id"])))
@@ -153,11 +156,12 @@ def composeMultipolygons(datastore):
         
         for member in relation["members"]:
             if member["type"] == "way":
-                if member["ref"] in datastore.ways:
+                way = datastore.getWay(member["ref"])
+                if way is not None:
                     if member["role"] == "outer":
-                        outerLines.append(datastore.ways[member["ref"]])
+                        outerLines.append(way)
                     elif member["role"] == "inner":
-                        innerLines.append(datastore.ways[member["ref"]])
+                        innerLines.append(way)
                 else:
                     return None
         
@@ -171,7 +175,7 @@ def composeMultipolygons(datastore):
             for way in lines:
                 line = composeWay(datastore, way)
                 if line == None:
-                    reportWarning("Multipolygon (%d) contains an incpomlete way! (%d)" % (id, way["id"]))
+                    reportWarning("Multipolygon (%d) contains an incomplete way! (%d)" % (id, way["id"]))
                     return None
                 start = way["nodes"][0]
                 end   = way["nodes"][-1]
@@ -181,7 +185,7 @@ def composeMultipolygons(datastore):
                         endpoints[point].append(way)
                     else:
                         endpoints[point] = [way]
-            
+                        
             for ways in endpoints.values():
                 if len(ways) % 2 != 0:
                     reportWarning("Multipolygon (%d) has an unclosed ring!" % (id))
@@ -245,7 +249,7 @@ def composeMultipolygons(datastore):
                 else:
                     reportWarning("Multipolygon (%d) ring is not closed!" % (id))
             return composedLines
-        
+     
         outerRings = composeLoops(outerLines)
         innerRings = composeLoops(innerLines)
         
@@ -262,8 +266,8 @@ def composeMultipolygons(datastore):
         
         outerRings.extend(innerRings)
         return outerRings
-            
-    for relation in datastore.relations.itervalues():
+    
+    for relation in datastore.getRelationsIter():
         if "type" in relation["tags"] and (relation["tags"]["type"] == "multipolygon" or relation["tags"]["type"] == "boundary"):
             result = composeMultipolygon(relation["id"],relation)
             if not result:
@@ -275,7 +279,7 @@ def composeMultipolygons(datastore):
             else:
                 multipolygons.append(relation)
                 relation["composed"] = result
-            
+                
     if incompleteCount:
         print incompleteCount,"incomplete relations!"
     
@@ -353,7 +357,7 @@ class AreaColector():
         object: the object"""
         if type == "way" and object["nodes"]:
             # Is it closed?
-            if object["nodes"][0] == object["nodes"][-1]:
+            if object["nodes"][0] == object["nodes"][-1] and len(object["nodes"]) > 2:
                 for key in self.areaTags.keys():
                     # Check if it has an area style tag
                     if key in object["tags"]:
@@ -372,39 +376,6 @@ class CopyTagValue():
             object["tags"][self.totag] = object["tags"][self.fromtag]
         return object
 
-class InsertInline():
-    """Insert nodes as they are parsed"""
-    
-    def __init__(self, tags, db):
-        """tags: a list of tag columns
-        """
-        self.tags = tags[:]
-        if "way_area" in self.tags:
-            del self.tags[self.tags.index("way_area")]
-        pointTags = ["osm_id","way"]
-        pointTags.extend(self.tags)
-        values = "\", \"".join(pointTags)
-        values = "\"" + values + "\""
-        placeholders = "?,GeomFromWKB(?,4326)," + ("?," * (len(pointTags)-2))[:-1]
-        self.pointInsert = "insert into world_point (%s) values (%s)" % (values, placeholders)
-        self.cursor = db.cursor()
-        
-    
-    def testElement(self, type, object):
-        """type: A string representing the type of object being tested
-        object: the object"""
-        if type == "node" and object["tags"]:
-            point = Point(object["point"])
-            values = [object["id"],sqlite.Binary(point.wkb)]
-            for tag in self.tags:
-                if tag in object["tags"]:
-                    values.append(object["tags"][tag])
-                else:
-                    values.append(None)
-            self.cursor.execute(self.pointInsert, values)
-            del object["tags"]
-        return object
-
 def initializeSqlite(db, tags):
     """Initialized an empty SpatiaLite database"""
     cur = db.cursor()
@@ -415,10 +386,10 @@ def initializeSqlite(db, tags):
     # While it would be better to call the init script, we have no way to locate it on random systems
     #with open('/Library/Frameworks/SQLite3.framework/Resources/init_spatialite.sql') as file:
     #    cur.executescript(file.read())
-    cur.execute("select InitSpatialMetaData()")
+    cur.execute("SELECT InitSpatialMetaData()")
     
     #ver = map(int, cur.execute("select spatialite_version()").fetchone()[0].split("."))
-    column_count = len(cur.execute("pragma table_info(spatial_ref_sys)").fetchall())
+    column_count = len(cur.execute("PRAGMA table_info(spatial_ref_sys)").fetchall())
     
     if column_count == 6:
         srs = [
@@ -434,16 +405,16 @@ def initializeSqlite(db, tags):
         [4326, "epsg", 4326, "WGS 84", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"],
         [900913, "spatialreference.org", 900913, "Popular Visualisation CRS / Mercator (deprecated)", "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +units=m +k=1.0 +nadgrids=@null +no_defs"]
         ]
-        cur.executemany("insert or ignore into spatial_ref_sys values (?,?,?,?,?)", srs)
+        cur.executemany("INSERT OR IGNORE INTO spatial_ref_sys VALUES (?,?,?,?,?)", srs)
         
     initSql = """CREATE TABLE "world_polygon" ("osm_id" INTEGER, "osm_type" VCHAR(1), %(tagColumns)s);
     CREATE TABLE "world_line" ("osm_id" INTEGER, %(tagColumns)s);
     CREATE TABLE "world_point" ("osm_id" INTEGER, %(tagColumns)s);
     CREATE TABLE "world_roads" ("osm_id" INTEGER, "osm_type" VCHAR(1), %(tagColumns)s);
-    select AddGeometryColumn('world_polygon', 'way', 4326, 'MULTIPOLYGON', 2);
-    select AddGeometryColumn('world_line', 'way', 4326, 'LINESTRING', 2);
-    select AddGeometryColumn('world_point', 'way', 4326, 'POINT', 2);
-    select AddGeometryColumn('world_roads', 'way', 4326, 'GEOMETRYCOLLECTION', 2);
+    SELECT AddGeometryColumn('world_polygon', 'way', 4326, 'MULTIPOLYGON', 2);
+    SELECT AddGeometryColumn('world_line', 'way', 4326, 'LINESTRING', 2);
+    SELECT AddGeometryColumn('world_point', 'way', 4326, 'POINT', 2);
+    SELECT AddGeometryColumn('world_roads', 'way', 4326, 'GEOMETRYCOLLECTION', 2);
     """ % {"tagColumns": tags}
     cur.executescript(initSql)
     
@@ -456,59 +427,77 @@ def initializeSqlite(db, tags):
 def writeMpolysToSQLite(db, mpolys, tags):    
     shapelyPolygonizeMultipolygons(mpolys)
     
-    cur = db.cursor()
-    
+    cur = db.cursor() 
     for mpoly in mpolys:
-        cur.execute("insert into world_polygon(osm_id,osm_type,way) values ((?),'R',GeomFromWKB((?),4326))", [mpoly["id"],sqlite.Binary(mpoly["shape"].wkb)])
+        cur.execute("INSERT INTO world_polygon(osm_id,osm_type,way) VALUES ((?),'R',GeomFromWKB((?),4326))", [mpoly["id"],sqlite.Binary(mpoly["shape"].wkb)])
         rowid = cur.lastrowid
         for tag in tags:
             if tag in mpoly["tags"]:
-                sql = "update world_polygon set \"%s\" = ? where rowid == (?)" % (tag)
+                sql = "UPDATE world_polygon SET \"%s\" = ? WHERE rowid == (?)" % (tag)
                 cur.execute(sql, [mpoly["tags"][tag], rowid])
+    cur.close()
     
 def writeSimpleAreasToSQLite(db, datastore, ac, tags):    
     cur = db.cursor()
-    
     for area in ac.areas:
         line = composeWay(datastore, area)
         if not line or not area["tags"]:
             continue
         mpoly = MultiPolygon([[line,[]]])
-        cur.execute("insert into world_polygon(osm_id,osm_type,way) values ((?),'W',GeomFromWKB((?),4326))", [area["id"], sqlite.Binary(mpoly.wkb)])
+        cur.execute("INSERT INTO world_polygon(osm_id,osm_type,way) VALUES ((?),'W',GeomFromWKB((?),4326))", [area["id"], sqlite.Binary(mpoly.wkb)])
         rowid = cur.lastrowid
+        sqlTags = []
+        sqlTagKeys = []
         for tag in tags:
             if tag in area["tags"]:
-                sql = "update world_polygon set \"%s\" = ? where rowid == (?)" % (tag)
-                cur.execute(sql, [area["tags"][tag], rowid])
+                sqlTags.append(tag)
+                sqlTagKeys.append(area["tags"][tag])                
+        if len(sqlTagKeys) > 0:
+            sql = "UPDATE world_polygon SET %s WHERE rowid == (?)" % (','.join(['\"%s\" = ?' % (x) for x in sqlTags]))
+            sqlTagKeys.append(rowid)
+            cur.execute(sql, sqlTagKeys)
+    cur.close()
 
 def writeLinesToSQLite(db, datastore, tags):    
-    cur = db.cursor()
-    
-    for way in datastore.ways.itervalues():
+    cur = db.cursor()  
+    for way in datastore.getWaysIter():
         line = composeWay(datastore, way)
         if not way["tags"] or not line:
             continue
         linestring = LineString(line)
-        cur.execute("insert into world_line(osm_id,way) values ((?),GeomFromWKB((?),4326))", [way["id"],sqlite.Binary(linestring.wkb)])
+        cur.execute("INSERT INTO world_line(osm_id,way) VALUES ((?),GeomFromWKB((?),4326))", [way["id"],sqlite.Binary(linestring.wkb)])
         rowid = cur.lastrowid
+        sqlTags = []
+        sqlTagKeys = []
         for tag in tags:
             if tag in way["tags"]:
-                sql = "update world_line set \"%s\" = ? where rowid == (?)" % (tag)
-                cur.execute(sql, [way["tags"][tag], rowid])
+                sqlTags.append(tag)
+                sqlTagKeys.append(way["tags"][tag])    
+        if len(sqlTagKeys) > 0:
+            sql = "UPDATE world_line SET %s WHERE rowid == (?)" % (','.join(['\"%s\" = ?' % (x) for x in sqlTags]))
+            sqlTagKeys.append(rowid)
+            cur.execute(sql, sqlTagKeys)
+    cur.close()
 
 def writeNodesToSQLite(db, datastore, tags):
     cur = db.cursor()
-    
-    for node in datastore.nodes.itervalues():
+    for node in datastore.getNodesIter():
         if not node["tags"]:
             continue
         point = Point(node["point"])
-        cur.execute("insert into world_point(osm_id,way) values ((?),GeomFromWKB((?),4326))", [node["id"],sqlite.Binary(point.wkb)])
+        cur.execute("INSERT INTO world_point(osm_id,way) VALUES ((?),GeomFromWKB((?),4326))", [node["id"],sqlite.Binary(point.wkb)])
         rowid = cur.lastrowid
+        sqlTags = []
+        sqlTagKeys = []
         for tag in tags:
             if tag in node["tags"]:
-                sql = "update world_point set \"%s\" = ? where rowid == (?)" % (tag)
-                cur.execute(sql, [node["tags"][tag], rowid])
+                sqlTags.append(tag)
+                sqlTagKeys.append(node["tags"][tag])  
+        if len(sqlTagKeys) > 0:
+            sql = "UPDATE world_point SET %s WHERE rowid == (?)" % (','.join(['\"%s\" = ?' % (x) for x in sqlTags]))
+            sqlTagKeys.append(rowid)
+            cur.execute(sql, sqlTagKeys)
+    cur.close()
 
 def sqlCalculateValues(db):
     cur = db.cursor()
@@ -545,8 +534,7 @@ def sqlCreateIndexes(db):
     for table in ["polygon", "line", "point", "roads"]:
         cur.execute("select CreateSpatialIndex('world_%s','way')" % table)
 
-def parseFile(osmfilename, db, config,  verbose=False, slim=False):
-    #slim = True
+def parseFile(osmfilename, db, config, verbose=False, useCache=False):
     if osmfilename.endswith(".osm.pbf"):
         if OSMPBFParser:
             osmParser = OSMPBFParser.OSMPBFParser()
@@ -556,7 +544,11 @@ def parseFile(osmfilename, db, config,  verbose=False, slim=False):
     else:
         osmParser = OSMXMLParser.OSMXMLParser()
     
-    datastore = OSMMemStore.OSMMemStore()
+    if useCache:
+        datastore = OSMSQLiteStore.OSMSQLiteStore(db)
+    else:
+        datastore = OSMMemStore.OSMMemStore()
+    
     osmParser.reportProgress = reportDetailedProgress
     osmParser.reportWarning  = reportWarning
     osmParser.reportFinished = reportEndParse
@@ -569,18 +561,19 @@ def parseFile(osmfilename, db, config,  verbose=False, slim=False):
     
     osmParser.endElementFilters.append(ac)
     osmParser.endElementFilters.append(CopyTagValue(fromtag="layer", totag="z_order"))
-    if slim:
-        osmParser.endElementFilters.append(InsertInline(tags, db))
     
     reportStatus("Parsing OSM file...")
     osmParser.parse(osmfilename, datastore)
     
+    # write temporary memory content to database
+    datastore.commit()
+    
     #composeWays(osmParser)
     mpolys = composeMultipolygons(datastore)
     
-    print len(datastore.relations), "relations"
-    print len(datastore.nodes), "nodes"
-    print len(datastore.ways), "ways"
+    print datastore.getNumRelations(), "relations"
+    print datastore.getNumNodes(), "nodes"
+    print datastore.getNumWays(), "ways"
     
     print len(mpolys), "multipolygons"
     print len(ac.areas), "areas"
@@ -591,18 +584,13 @@ def parseFile(osmfilename, db, config,  verbose=False, slim=False):
     writeSimpleAreasToSQLite(db, datastore, ac, tags)
     
     # Trim areas out of the lines table
-    for area in ac.areas:
-        if area["id"] in datastore.ways:
-            del datastore.ways[area["id"]]
-        else:
-            print "Huh?",area["id"]
-            print area["tags"]
+    reportStatus("Trim areas out of the lines table...")
+    datastore.delWays([area["id"] for area in ac.areas])
     
     reportStatus("Writing lines...")
     writeLinesToSQLite(db, datastore, tags)
-    if not slim:
-        reportStatus("Writing nodes...")
-        writeNodesToSQLite(db, datastore, tags)
+    reportStatus("Writing nodes...")
+    writeNodesToSQLite(db, datastore, tags)
     reportStatus("Calculating values in SQL...")
     sqlCalculateValues(db)
     reportStatus("Copying values to world_roads...")
@@ -611,6 +599,7 @@ def parseFile(osmfilename, db, config,  verbose=False, slim=False):
     sqlCreateIndexes(db)
     
     db.commit()
+    datastore.cleanup()
 
 defaultConfig = {
 "area_tags": {
@@ -670,6 +659,23 @@ def trydb(dbfilename, force=False):
         os.unlink(dbfilename)
     
     db = sqlite.connect(dbfilename)
+    
+    db.enable_load_extension(True)
+    
+    error = ""
+    if platform.system() == 'Linux':
+        try:
+            db.load_extension("libspatialite.so") 
+        except:
+            pass    
+        error = "ERROR: Cannot find libspatialite.so in path."
+    elif platform.system() == 'Windows':
+        try:
+            db.load_extension("libspatialite-2.dll")
+        except:
+            pass
+        error = "ERROR: Cannot find libspatialite-2.dll in path."
+    
     cur = db.cursor()
     
     try:
@@ -694,9 +700,10 @@ def main():
         print "     --force        force overwrite of existing data"
         print " -v, --verbose      be verbose"
         print " -c, --config       config python file to read"
+        print "     --cache        cache intermediate data to disk"
 
     try:
-        (args, files) = getopt.getopt(sys.argv[1:], 'vc:h', ["force", "verbose", "config","help"])
+        (args, files) = getopt.getopt(sys.argv[1:], 'vc:h', ["force", "verbose", "config", "help", "cache"])
     except getopt.GetoptError as ex:
         print ex
         return
@@ -721,6 +728,10 @@ def main():
     if "--config" in args:
         configFile = args["--config"]
 
+    useCache = False
+    if "--cache" in args:
+        useCache = True
+
     dbfilename = files[0]
     osmfilename = files[1]
     
@@ -733,7 +744,7 @@ def main():
 
     if db:
         print u"Importing %s" % osmfilename
-        parseFile(osmfilename, db, config=config, verbose=verbose)
+        parseFile(osmfilename, db, config=config, verbose=verbose, useCache=useCache)
 
 if __name__ == "__main__":
     main()
