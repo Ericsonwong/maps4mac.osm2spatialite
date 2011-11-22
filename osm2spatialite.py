@@ -416,12 +416,26 @@ def initializeSqlite(db, tags):
     #with open('/Library/Frameworks/SQLite3.framework/Resources/init_spatialite.sql') as file:
     #    cur.executescript(file.read())
     cur.execute("select InitSpatialMetaData()")
-    srs = [
-    [4326, "epsg", 4326, "WGS 84", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"],
-    [900913, "spatialreferencing.org", 900913, "Popular Visualisation CRS / Mercator (deprecated)", "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +units=m +k=1.0 +nadgrids=@null +no_defs"]
-    ]
-    cur.executemany("insert into spatial_ref_sys values (?,?,?,?,?)", srs)
     
+    #ver = map(int, cur.execute("select spatialite_version()").fetchone()[0].split("."))
+    column_count = len(cur.execute("pragma table_info(spatial_ref_sys)").fetchall())
+    
+    if column_count == 6:
+        srs = [
+          [4326, "epsg", 4326, "WGS 84", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs","""GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]]"""],
+          [900913, "spatialreference.org", 900913,
+          "Popular Visualisation CRS / Mercator (deprecated)", "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +units=m +k=1.0 +nadgrids=@null +no_defs",
+          """PROJCS["WGS84 / Simple Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS_1984", 6378137.0, 298.257223563]],PRIMEM["Greenwich", 0.0],UNIT["degree", 0.017453292519943295],AXIS["Longitude", EAST],AXIS["Latitude", NORTH]],PROJECTION["Mercator_1SP_Google"],PARAMETER["latitude_of_origin", 0.0],PARAMETER["central_meridian", 0.0],PARAMETER["scale_factor", 1.0],PARAMETER["false_easting", 0.0],PARAMETER["false_northing", 0.0],UNIT["m", 1.0],AXIS["x", EAST],AXIS["y", NORTH],AUTHORITY["EPSG","900913"]]"""
+          ],    
+         ]
+        cur.executemany("insert or ignore into spatial_ref_sys values (?,?,?,?,?,?)", srs)
+    else:        
+        srs = [
+        [4326, "epsg", 4326, "WGS 84", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"],
+        [900913, "spatialreference.org", 900913, "Popular Visualisation CRS / Mercator (deprecated)", "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +units=m +k=1.0 +nadgrids=@null +no_defs"]
+        ]
+        cur.executemany("insert or ignore into spatial_ref_sys values (?,?,?,?,?)", srs)
+        
     initSql = """CREATE TABLE "world_polygon" ("osm_id" INTEGER, "osm_type" VCHAR(1), %(tagColumns)s);
     CREATE TABLE "world_line" ("osm_id" INTEGER, %(tagColumns)s);
     CREATE TABLE "world_point" ("osm_id" INTEGER, %(tagColumns)s);
